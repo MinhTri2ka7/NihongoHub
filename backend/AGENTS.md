@@ -38,7 +38,7 @@ Controller → Service → Repository → Database
 - **Infrastructure**: kết nối database và các tích hợp kỹ thuật. Các kiểm tra
   kết nối như `SELECT 1` thuộc infrastructure, không phải repository nghiệp vụ.
 - **Bootstrap/config**: thiết lập ứng dụng khi khởi động và cấu hình đã validate.
-  Code ứng dụng đọc env qua `EnvConfigService`; việc đọc env trực tiếp chỉ nằm
+  Code ứng dụng import `envConfig` từ `src/config/env.config.ts`; việc đọc env trực tiếp chỉ nằm
   trong lớp config dùng chung, kể cả cấu hình CLI.
 
 Cấu trúc module nghiệp vụ:

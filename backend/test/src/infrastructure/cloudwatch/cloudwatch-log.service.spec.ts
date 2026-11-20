@@ -5,7 +5,9 @@ import {
   ResourceAlreadyExistsException,
 } from '@aws-sdk/client-cloudwatch-logs';
 import { CloudwatchLogService } from '../../../../src/infrastructure/cloudwatch/cloudwatch-log.service.js';
-import type { EnvConfigService } from '../../../../src/config/env-config.service.js';
+import { envConfig } from '../../../../src/config/env.config.js';
+
+const defaultCloudwatch = envConfig.cloudwatch;
 
 const aws = vi.hoisted(() => ({
   send: vi.fn(),
@@ -29,15 +31,14 @@ vi.mock('@aws-sdk/client-cloudwatch-logs', async (importOriginal) => {
 });
 
 function createService(enabled = true) {
-  return new CloudwatchLogService({
-    cloudwatch: {
-      enabled,
-      region: 'ap-southeast-1',
-      logGroup: '/nihongo/backend/test',
-      logStream: 'local-test',
-      credentials: undefined,
-    },
-  } as EnvConfigService);
+  envConfig.cloudwatch = {
+    enabled,
+    region: 'ap-southeast-1',
+    logGroup: '/nihongo/backend/test',
+    logStream: 'local-test',
+    credentials: undefined,
+  };
+  return new CloudwatchLogService();
 }
 
 describe('CloudwatchLogService', () => {
@@ -51,6 +52,7 @@ describe('CloudwatchLogService', () => {
   });
 
   afterEach(() => {
+    envConfig.cloudwatch = defaultCloudwatch;
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();

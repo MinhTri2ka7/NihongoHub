@@ -15,11 +15,13 @@ import { AppService } from './../src/app.service.js';
 import { ErrorCode } from './../src/common/errors/error-code.js';
 import { setupRequestLogging } from './../src/bootstrap/logging.js';
 import { RequestLogService } from './../src/common/logging/request-log.service.js';
-import { ConfigService } from '@nestjs/config';
+import { envConfig } from '../src/config/env.config.js';
 import { mkdtemp, readdir, readFile, unlink, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getDrizzleToken } from '@nestjs/drizzle';
+
+const defaultRequestLog = envConfig.requestLog;
 
 @Controller('security-test')
 class SecurityTestController {
@@ -55,7 +57,9 @@ describe('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     logDirectory = await mkdtemp(join(tmpdir(), 'nihongo-request-log-'));
-    app.get(ConfigService).set('REQUEST_LOG_DIR', logDirectory);
+    envConfig.requestLog = {
+      directory: logDirectory,
+    };
     setupRequestLogging(app);
     await app.init();
   });
@@ -320,6 +324,7 @@ describe('AppController (e2e)', () => {
   });
 
   afterEach(async () => {
+    envConfig.requestLog = defaultRequestLog;
     vi.restoreAllMocks();
     await app.close();
     for (const file of await readdir(logDirectory)) {

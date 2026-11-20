@@ -1,17 +1,14 @@
 import { Module } from '@nestjs/common';
 import { DrizzleModule } from '@nestjs/drizzle';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { EnvConfigModule } from '../../config/env-config.module.js';
-import { EnvConfigService } from '../../config/env-config.service.js';
+import { envConfig } from '../../config/env.config.js';
 import { DatabaseService } from './database.service.js';
 import { relations } from './relations.js';
 
 @Module({
   imports: [
     DrizzleModule.forRootAsync<typeof drizzle>({
-      imports: [EnvConfigModule],
-      inject: [EnvConfigService],
-      useFactory: (envConfig: EnvConfigService) => {
+      useFactory: () => {
         const database = envConfig.database;
         return {
           drizzle,

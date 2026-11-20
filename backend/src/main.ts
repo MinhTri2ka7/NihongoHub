@@ -1,14 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule, ObserveInstrument } from './app.module.js';
 import { setupSwagger } from './bootstrap/swagger.js';
-import { EnvConfigService } from './config/env-config.service.js';
+import { envConfig } from './config/env.config.js';
 import { setupRequestLogging } from './bootstrap/logging.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     instrument: ObserveInstrument,
   });
-  const envConfig = app.get(EnvConfigService);
 
   try {
     app.enableShutdownHooks();

@@ -34,38 +34,34 @@ overwriting environment variables already supplied by the host.
 
 ## Environment configuration
 
-`EnvConfigModule` uses `@nestjs/config` to load and validate configuration once
-at startup. It exports the global `EnvConfigService` for application code.
-Read environment settings through this service instead of accessing `process.env`
-or injecting the underlying `ConfigService` in feature modules.
+`src/config/env.config.ts` is the single entry point for environment settings.
+Import `envConfig` directly; no config service injection or config module is needed.
+This file loads `.env.local` and `.env` once through `dotenv`, then exports a
+plain object that maps environment variable names to settings. It only applies
+defaults and basic number/boolean conversion; it has no DTO or env validation.
+Other application files do not read env directly.
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { EnvConfigService } from './config/env-config.service.js';
+import { envConfig } from './config/env.config.js';
 
 @Injectable()
 export class ExampleService {
-  constructor(private readonly envConfig: EnvConfigService) {}
-
   getPort(): number {
-    return this.envConfig.port;
+    return envConfig.port;
   }
 }
 ```
 
-Configuration files:
-
-- `src/config/env.validation.ts`: environment types, defaults, and validation.
-- `src/config/env-config.service.ts`: typed accessors used by application code.
-- `src/config/env-config.module.ts`: file loading and provider registration.
-
-When adding an environment variable, add its type and validation in
-`env.validation.ts`, expose it through `EnvConfigService`, and document its sample
-value in `.env.example`. Set the actual local value in `.env.local`.
-`PORT` defaults to 3000 and must be an integer from 1 to 65535. `NODE_ENV` defaults
-to `development` and accepts `development`, `test`, or `production`. Observe keys
-are optional, but both must be supplied together when enabled. Invalid values
-stop startup without printing credential values.
+Use `envConfig.database`, `envConfig.jwt`, `envConfig.cloudwatch`,
+`envConfig.swagger`, `envConfig.observe`, and `envConfig.requestLog` for grouped
+settings. Values are captured when the module is imported. To rename an env key,
+change its mapping here without changing the consuming services/controllers.
+Document sample values in `.env.example`; put actual local values in `.env.local`.
+Tests mock `dotenv` and use explicit environment values, so they never read real
+local configuration files. `PORT` defaults to 3000 and `NODE_ENV` to development.
+Configuration errors are handled by the consuming library or operation rather
+than by a separate env validator.
 
 ```bash
 $ npm install
@@ -90,7 +86,7 @@ $ npm run start:prod
 hooks, configures Swagger, and starts the HTTP server. The `src/bootstrap/`
 directory holds application startup configuration. Its `swagger.ts` configures
 the API documentation and interactive API testing page, reading all settings
-through `EnvConfigService`.
+through `envConfig`.
 
 - Swagger UI: `http://localhost:3000/docs`
 - OpenAPI JSON: `http://localhost:3000/docs/json`
@@ -195,14 +191,14 @@ database/
 Set `DATABASE_URL` in `.env.local` to your PostgreSQL connection string, including
 the database name. The example URL is a local placeholder; create the database
 and set your actual credentials before starting the backend. All application
-database settings are read through `EnvConfigService.database`.
+database settings are read through `envConfig.database`.
 
 - `DATABASE_POOL_MAX=10`: maximum connections per application instance.
 - `DATABASE_CONNECT_TIMEOUT_MS=5000`: connection acquisition timeout.
 - `DATABASE_IDLE_TIMEOUT_MS=30000`: idle pool connection timeout.
 - `DATABASE_QUERY_TIMEOUT_MS=10000`: query and PostgreSQL statement timeout.
 
-All numeric settings must be positive integers. Use the connection URL's SSL
+Supply positive integers for numeric settings. Use the connection URL's SSL
 parameters when the database provider requires TLS. SQL parameter logging is
 not enabled. `DatabaseService` executes `SELECT 1` during startup; the app fails
 startup if PostgreSQL cannot be reached. Drizzle closes the pool on application
@@ -218,9 +214,10 @@ definitions and relations are intentionally empty until features are added.
 No users module or table has been created.
 
 Drizzle Kit uses `drizzle.config.ts` at the repository root. It reads environment
-values through `src/config/env.loader.ts` and reuses `validateDatabaseEnv()`,
-with the same precedence as Nest: host environment, `.env.local`, then `.env`.
+values through `envConfig.database` from `src/config/env.config.ts`, with the same
+precedence as the application: host environment, `.env.local`, then `.env`.
 Only the config layer reads `process.env`; CLI scripts do not bootstrap Nest.
+The CLI imports the same source `env.config.ts` directly; a build is not required.
 
 ```bash
 npm run db:generate  # Generate SQL after adding/changing schema
@@ -260,7 +257,7 @@ For local credentials, either configure an AWS profile (`AWS_PROFILE`) or set
 credentials also need `AWS_SESSION_TOKEN`. Keep all keys out of source control.
 If explicit keys are absent, the SDK uses its default credential provider chain.
 Application settings and explicit credentials are accessed through
-`EnvConfigService`; feature code does not read environment variables directly.
+`envConfig`; feature code does not read environment variables directly.
 
 CloudWatch defaults to disabled. When enabled, Region, group and stream are
 required and validated without exposing their values in errors. Log messages
@@ -280,6 +277,61 @@ can lose buffered events; the local files are not a replay queue.
 To verify delivery manually, start the backend with valid local configuration,
 call `/health`, then open the configured log group and stream in CloudWatch.
 Automated tests disable CloudWatch or mock its SDK and never send real logs.
+
+## JWT utilities
+
+`src/common/verifications/` contains `JwtSignService.signToken({ sub })` and
+`JwtVerifyService.verifyToken(token)`. Import `VerificationsModule` in a consuming
+module and inject the services. The module exports these services without adding
+an authentication route or a guard.
+
+JWT settings are read through `envConfig.jwt`:
+
+- `JWT_SECRET`: required, at least 32 bytes; use a cryptographically random secret.
+  `.env.example` leaves it blank; the untracked `.env.local` has its own secret.
+- `JWT_EXPIRES_IN_SECONDS`: positive integer seconds, default 900 (15 minutes).
+- `JWT_ISSUER`: default `nihongo-backend`.
+- `JWT_AUDIENCE`: default `nihongo-client`.
+
+Signing uses HS256 and only includes `sub` plus configured issuer, audience,
+issued-at and expiration claims. Verification pins HS256 and checks signature,
+issuer, audience, expiry, activation time and payload shape. It returns the
+validated claims or throws 401 with `INVALID_TOKEN`/`TOKEN_EXPIRED`. Unexpected
+internal errors propagate normally. Neither service logs tokens or secrets.
+Verification alone does not check account status, revoke tokens or manage sessions.
+
+Input and payload rules live in `common/verifications/dto/sign-jwt.dto.ts`,
+`verify-jwt.dto.ts`, and `jwt-payload.dto.ts`. Services call the DTO parsers;
+signature verification and JWT error handling stay in `JwtVerifyService`.
+The payload DTO also provides the return type, so no duplicate JWT interface
+is needed. Request log interfaces live in `common/logging/interfaces/log.interface.ts`;
+CloudWatch queue interfaces live in `infrastructure/cloudwatch/interfaces/cloudwatch.interface.ts`.
+
+## TOTP utilities
+
+`VerificationsModule` also exports `TotpGenerateService` and `TotpVerifyService`,
+using `otplib` 13.6.0:
+
+```typescript
+const otp = await totpGenerateService.generateCode(secret);
+const valid = await totpVerifyService.verifyCode(otp, secret);
+```
+
+Both services use the current system time, HMAC-SHA1, six digits and 30-second
+periods. Verification accepts the previous, current and next period (30 seconds
+of tolerance in either direction). OTPs are strings so leading zeros survive.
+
+Secrets must be Base32 encoding of 16–64 random bytes; surrounding whitespace and
+letter case are normalized by the DTO. Use a unique random secret per account.
+Invalid generation input throws a safe `TypeError`. Invalid verification input,
+incorrect codes and codes outside the allowed window return `false`; unexpected
+library/crypto failures propagate normally. The services do not log OTPs/secrets
+or add any HTTP endpoints, environment variables or database tables.
+
+Validation lives in `dto/generate-totp.dto.ts` and `dto/verify-totp.dto.ts` next to
+the JWT DTOs. Tests use the public SHA-1 vectors from RFC 6238, reduced to six
+digits, plus time boundaries and clock tolerance. Verification is stateless:
+consumption/replay protection and attempt limits belong in the future auth flow.
 
 ## Run tests
 

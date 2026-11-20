@@ -1,8 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { RequestLogService } from '../../../../src/common/logging/request-log.service.js';
-import type { EnvConfigService } from '../../../../src/config/env-config.service.js';
+import { envConfig } from '../../../../src/config/env.config.js';
 import type { CloudwatchLogService } from '../../../../src/infrastructure/cloudwatch/cloudwatch-log.service.js';
+
+const defaultRequestLog = envConfig.requestLog;
 
 vi.mock('node:fs/promises', () => ({
   mkdir: vi.fn(),
@@ -11,6 +13,7 @@ vi.mock('node:fs/promises', () => ({
 
 describe('RequestLogService', () => {
   afterEach(() => {
+    envConfig.requestLog = defaultRequestLog;
     vi.restoreAllMocks();
     vi.resetAllMocks();
   });
@@ -33,12 +36,12 @@ describe('RequestLogService', () => {
         .spyOn(Logger.prototype, 'error')
         .mockImplementation(() => undefined);
       const writeLog = vi.fn();
-      const service = new RequestLogService(
-        {
-          requestLog: { directory: 'private-directory' },
-        } as EnvConfigService,
-        { writeLog } as unknown as CloudwatchLogService,
-      );
+      envConfig.requestLog = {
+        directory: 'private-directory',
+      };
+      const service = new RequestLogService({
+        writeLog,
+      } as unknown as CloudwatchLogService);
       const entry = {
         timestamp: '2026-11-20T00:00:00.000Z',
         request_id: 'test-request',

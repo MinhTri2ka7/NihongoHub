@@ -6,13 +6,9 @@ import {
   PutLogEventsCommand,
   ResourceAlreadyExistsException,
 } from '@aws-sdk/client-cloudwatch-logs';
-import { EnvConfigService } from '../../config/env-config.service.js';
+import { envConfig } from '../../config/env.config.js';
 
-interface QueuedLogEvent {
-  message: string;
-  timestamp: number;
-  bytes: number;
-}
+import type { QueuedLogEvent } from './interfaces/cloudwatch.interface.js';
 
 const MAX_BATCH_BYTES = 1_048_576;
 const MAX_QUEUED_EVENTS = 1_000;
@@ -34,7 +30,7 @@ export class CloudwatchLogService
   private closing = false;
   private overflowReported = false;
 
-  constructor(envConfig: EnvConfigService) {
+  constructor() {
     this.settings = envConfig.cloudwatch;
     if (this.settings.enabled) {
       this.client = new CloudWatchLogsClient({

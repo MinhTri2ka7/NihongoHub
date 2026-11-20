@@ -1,10 +1,7 @@
 import { vi } from 'vitest';
 
-// Prevent application imports from opening real environment files.
-vi.mock('../src/config/env.loader.js', () => ({
-  ENV_FILE_PATHS: [],
-  loadEnvironment: () => ({}),
-}));
+// Tests use explicit environment values and never read local credentials.
+vi.mock('dotenv', () => ({ config: vi.fn() }));
 
 vi.mock('@nestjs/observe', async () => {
   const { Module } = await import('@nestjs/common');
@@ -25,6 +22,10 @@ vi.mock('@nestjs/observe', async () => {
 const environment = {
   NODE_ENV: 'test',
   PORT: '3000',
+  JWT_SECRET: 'test-only-jwt-secret-at-least-32-bytes-long',
+  JWT_EXPIRES_IN_SECONDS: '900',
+  JWT_ISSUER: 'nihongo-test',
+  JWT_AUDIENCE: 'nihongo-test-client',
   DATABASE_URL: 'postgresql://test:test@127.0.0.1:1/nihongo_test',
   DATABASE_POOL_MAX: '1',
   DATABASE_CONNECT_TIMEOUT_MS: '100',

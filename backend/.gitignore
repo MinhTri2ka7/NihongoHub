@@ -2,6 +2,9 @@
 
 # project files
 .env
+.env.*
+!.env.example
+/logs/
 
 # compiled output
 /dist

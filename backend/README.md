@@ -25,6 +25,20 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Continuous integration
+
+[Backend CI](../.github/workflows/backend-ci.yml) runs on every push to `main`,
+including commits merged into `main`. It uses Node.js 24 and runs two independent jobs:
+
+- **Tests and code style:** `npm ci`, `npm run format:check`, `npm run lint`,
+  `npm test`, and `npm run test:e2e`.
+- **Typecheck and build:** `npm ci`, `npm run typecheck`, and `npm run build`.
+
+Commands run from `backend/`. Format checking reports differences without rewriting
+files; use `npm run format` locally to fix them. Tests use mocks and test settings,
+so CI does not need real database or AWS credentials. The build compiles the backend;
+it does not start or deploy the application. A failing command fails its job.
+
 ## Project setup
 
 Use Node.js 24 or later. Copy `.env.example` to `.env.local` and adjust the

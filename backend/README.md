@@ -28,12 +28,14 @@
 ## Continuous integration
 
 [Backend CI](../.github/workflows/backend-ci.yml) runs on every push to `main`,
-including commits merged into `main`. It uses Node.js 24 and runs three independent jobs:
+including commits merged into `main`. It uses Node.js 24 and runs four independent jobs:
 
 - **Tests and code style:** `npm ci`, `npm run format:check`, `npm run lint`,
   `npm test`, and `npm run test:e2e`.
 - **Code coverage:** `npm ci`, `npm run test:cov`, summary publishing and report upload.
 - **Typecheck and build:** `npm ci`, `npm run typecheck`, and `npm run build`.
+- **Security - Trivy:** scans the checked-out repository for dependency vulnerabilities,
+  supported configuration issues and exposed secrets; publishes a sanitized summary and artifact.
 
 Commands run from `backend/`. Format checking reports differences without rewriting
 files; use `npm run format` locally to fix them. Tests use mocks and test settings,
@@ -60,6 +62,34 @@ integration tests for shared error handling; the separate E2E suite is not merge
 
 Reports are generated even when tests fail where possible; publishing steps run
 when a summary file is available, without overriding the failing test result.
+
+### Security scanning
+
+The security job uses Trivy Action v0.36.0 pinned to a commit SHA and Trivy v0.76.2.
+It scans the repository tree, including the npm lockfile and development dependencies,
+without installing application dependencies. Generated dependencies, build outputs,
+coverage reports, Git metadata and temporary files are excluded. Git history is not scanned.
+
+HIGH/CRITICAL vulnerabilities and misconfigurations fail the job, including unfixed
+vulnerabilities. Any detected secret also fails the job, regardless of severity.
+Lower severity dependency/configuration findings remain visible in the report.
+Scanner failures or a missing/invalid report fail the job rather than imply a clean scan.
+
+Open the **Security - Trivy** job or workflow Summary for counts and locations.
+Download **trivy-security-report** for the sanitized JSON report, retained for 14 days,
+including when findings fail the policy. The report omits secret matches, source snippets,
+descriptions and raw scanner metadata. The temporary raw report is never uploaded and
+is deleted by the reporting step. No SARIF containing source snippets is published.
+
+Run the report safety/policy checks from the repository root with:
+
+```bash
+node --test .github/scripts/trivy-report.test.mjs
+```
+
+These checks verify redaction and failure behavior; they are not a substitute for a real
+Trivy scan. False positives require review, and dependency upgrades or ignore rules are
+separate changes; the workflow does not fix or suppress findings automatically.
 
 ## Project setup
 

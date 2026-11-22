@@ -101,6 +101,66 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  security:
+    name: Security - Trivy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Test security report sanitization and policy
+        run: node --test .github/scripts/trivy-report.test.mjs
+
+      - name: Scan repository with Trivy
+        id: trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_INCLUDE_DEV_DEPS: 'true'
+        with:
+          version: v0.76.2
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: 'false'
+          format: json
+          output: ${{ runner.temp }}/trivy-raw.json
+          # The reporting step enforces the policy after safely publishing findings.
+          exit-code: '0'
+          hide-progress: 'true'
+          timeout: 10m
+          cache-dir: ${{ runner.temp }}/trivy-cache
+          skip-dirs: .git,node_modules,backend/node_modules,backend/dist,backend/coverage,backend/tmp
+
+      - name: Publish sanitized security summary and enforce policy
+        id: security_report
+        if: ${{ !cancelled() && steps.trivy.outcome != 'skipped' }}
+        env:
+          TRIVY_RAW_REPORT: ${{ runner.temp }}/trivy-raw.json
+          TRIVY_SAFE_REPORT: ${{ runner.temp }}/trivy-safe/report.json
+        run: node .github/scripts/trivy-report.mjs
+
+      - name: Upload sanitized security report
+        if: ${{ !cancelled() && steps.security_report.outputs.report-ready == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-security-report
+          path: ${{ runner.temp }}/trivy-safe/report.json
+          if-no-files-found: error
+          retention-days: 14
+
   build:
     name: Typecheck and build
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
@@ -11,6 +11,12 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     root: './',
     include: ['**/*.spec.ts'],
+    exclude: [
+      ...configDefaults.exclude,
+      '**/.stryker-tmp/**',
+      'tmp/**',
+      'reports/**',
+    ],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

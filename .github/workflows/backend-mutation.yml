@@ -1,0 +1,70 @@
+name: Backend Mutation Testing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: Mutation testing pilot
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run mutation testing pilot
+        run: npm run test:mutation
+
+      - name: Publish mutation summary
+        if: ${{ !cancelled() && hashFiles('backend/reports/mutation/mutation.json') != '' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('reports/mutation/mutation.json', 'utf8'));
+          const statuses = ['Killed', 'Survived', 'NoCoverage', 'Timeout', 'CompileError', 'RuntimeError', 'Ignored'];
+          const counts = Object.fromEntries(statuses.map(status => [status, 0]));
+          for (const file of Object.values(report.files)) {
+            for (const mutant of file.mutants) counts[mutant.status] = (counts[mutant.status] ?? 0) + 1;
+          }
+          const detected = counts.Killed + counts.Timeout;
+          const valid = detected + counts.Survived + counts.NoCoverage;
+          const score = valid ? `${(detected / valid * 100).toFixed(2)}%` : 'N/A';
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Backend mutation testing pilot', '',
+            `**Mutation score: ${score}**`, '',
+            '| Status | Mutants |', '| --- | ---: |',
+            ...statuses.map(status => `| ${status} | ${counts[status]} |`), '',
+            'Scope: JWT verification and request logging middleware only.',
+            'Score = (Killed + Timeout) / (Killed + Timeout + Survived + NoCoverage).',
+            'Survivors need review; some mutations may preserve observable behavior.',
+            'No score threshold is enforced. Baseline or runner failures still fail the job.',
+            'Download backend-mutation-report and open index.html to inspect each mutation.', '',
+          ].join('\n'));
+          NODE
+
+      - name: Upload mutation report
+        if: ${{ !cancelled() && hashFiles('backend/reports/mutation/mutation.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-mutation-report
+          path: backend/reports/mutation/
+          if-no-files-found: error
+          retention-days: 14

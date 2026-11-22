@@ -9,6 +9,8 @@
 # compiled output
 /dist
 /coverage/
+/.stryker-tmp/
+/reports/mutation/
 /tmp
 /out-tsc
 /*.tsbuildinfo

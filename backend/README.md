@@ -31,7 +31,7 @@
 including commits merged into `main`. It uses Node.js 24 and runs four independent jobs:
 
 - **Tests and code style:** `npm ci`, `npm run format:check`, `npm run lint`,
-  `npm test`, and `npm run test:e2e`.
+  and `npm test` for unit and integration tests.
 - **Code coverage:** `npm ci`, `npm run test:cov`, summary publishing and report upload.
 - **Typecheck and build:** `npm ci`, `npm run typecheck`, and `npm run build`.
 - **Security - Trivy:** scans the checked-out repository for dependency vulnerabilities,
@@ -46,11 +46,11 @@ it does not start or deploy the application. A failing command fails its job.
 
 The dedicated coverage job measures test coverage with Vitest V8 across `src/**/*.ts`,
 including source files not reached by tests, excluding test files and type
-declarations. E2E tests run separately and are not included in these percentages.
+declarations. The percentages include both unit tests and isolated HTTP integration tests.
 Coverage is informational; no minimum percentage is enforced. The coverage job runs
 the `.spec.ts` suite independently from the test job, so failures in either job do
 not prevent the other job from starting. The suite also includes isolated HTTP
-integration tests for shared error handling; the separate E2E suite is not merged.
+integration tests for shared error handling.
 
 - **GitHub Actions:** open a workflow run's Summary to see lines, branches,
   functions and statements, with covered/total counts.
@@ -111,6 +111,35 @@ When upgrading parent packages, review whether each override can be removed, the
 rerun Trivy (including development dependencies), `npm audit`, tests, coverage,
 typecheck and build. Changes to CLI/editor dependencies also require checking
 Nest generation in dry-run mode and temporary-file creation/cleanup without deploying.
+
+### Mutation testing pilot
+
+Run `npm run test:mutation` in `backend/` to assess whether tests detect deliberately
+changed behavior in JWT verification and request logging middleware. StrykerJS
+`10.1.1` runs the related Vitest tests first, then evaluates mutations in a sandbox.
+Only the two source files listed in `stryker.config.json` are mutated; the original
+source is not rewritten. Environment files are excluded from the sandbox and tests
+use the existing mocked configuration/integrations.
+
+- Open `reports/mutation/index.html` for the interactive report.
+- `reports/mutation/mutation.json` contains machine-readable results.
+- `Killed` means a test caught a mutation; `Survived` needs investigation.
+- `NoCoverage` means no test exercised the mutation; `Timeout` means the mutant
+  exceeded the runner timeout. Errors and ignored mutants are reported separately.
+- The score is `(Killed + Timeout) / (Killed + Timeout + Survived + NoCoverage)`.
+  A survivor can preserve observable behavior, so review it before changing tests.
+
+The separate [Backend Mutation Testing workflow](../.github/workflows/backend-mutation.yml)
+runs manually: GitHub Actions → Backend Mutation Testing → Run workflow. The workflow
+must first be present on the default branch. It publishes a summary and a
+`backend-mutation-report` artifact retained for 14 days. This pilot does not run on
+every push, and its score does not enforce a minimum threshold. Failing baseline
+tests or runner errors still fail the job.
+
+Stryker's sandbox and generated reports are ignored by Git and excluded from Vitest
+discovery. New mutation-tool dependencies must also pass the normal security review;
+the initial installation reports moderate findings in its transitive `minimatch`
+and `qs` dependencies, with no HIGH/CRITICAL in npm audit. These are not ignored by CI.
 
 ## Project setup
 
@@ -298,7 +327,8 @@ shutdown. Startup failures after app creation also close the application.
 
 `GET /health` checks liveness. `GET /health/ready` executes `SELECT 1` and returns
 200 when successful, or 503 with `code: "DATABASE_UNAVAILABLE"` when unavailable.
-The existing HTTP E2E suite mocks Drizzle; it does not require a real database.
+Unit tests mock database dependencies; repository integration tests must use an
+isolated test database when checking actual queries and transactions.
 
 Inject the database into future providers with `@InjectDrizzle()` from
 `@nestjs/drizzle` and the `Database` type from `database.types.ts`. Table
@@ -430,14 +460,12 @@ consumption/replay protection and attempt limits belong in the future auth flow.
 Run `npm run typecheck` for TypeScript checks without emitting files. Vitest
 disables Vite env-file loading and uses `test/setup.ts` to prevent Nest env-file
 loading, provide synthetic configuration, and replace Observe with a test module.
-HTTP tests mock Drizzle and do not connect to PostgreSQL.
+The suite contains unit and integration tests. Existing isolated HTTP integration
+tests use a small Nest application with test dependencies and do not require PostgreSQL.
 
 ```bash
-# unit tests
+# unit and integration tests
 $ npm run test
-
-# e2e tests
-$ npm run test:e2e
 
 # test coverage
 $ npm run test:cov

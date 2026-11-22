@@ -74,8 +74,8 @@ src/common/filters/http-exception.filter.ts
 test/src/common/filters/http-exception.filter.spec.ts
 ```
 
-- Với E2E/integration theo module, giữ cùng thư mục đối xứng và đặt tên thể hiện
-  loại test, ví dụ `test/src/modules/<feature>/<feature>.e2e-spec.ts`.
+- Với integration test theo module, giữ cùng thư mục đối xứng và đặt tên thể hiện
+  loại test, ví dụ `test/src/modules/<feature>/<feature>.integration.spec.ts`.
 - Test hạ tầng/config cũng theo cùng quy tắc đối xứng. Dùng Vitest và `vi.fn()`.
 - Khi chạm vào test cũ đặt cạnh source, di chuyển test liên quan sang vị trí đối
   xứng nếu nằm trong phạm vi đã duyệt; không tự di chuyển toàn bộ test ngoài task.
@@ -144,7 +144,7 @@ npm run test
 npm run lint
 ```
 
-- Chạy thêm `npm run build`, `npm run test:e2e` hoặc integration test khi thay đổi
+- Chạy thêm `npm run build` và integration test khi thay đổi
   ảnh hưởng bootstrap, HTTP, database, dependency hoặc cấu hình build/test.
 - Viết/cập nhật test cho hành vi thay đổi, lỗi dự kiến và lỗi ngoài dự kiến phù
   hợp phạm vi; không chỉ kiểm tra code triển khai giống chính nó.

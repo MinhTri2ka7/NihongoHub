@@ -76,16 +76,14 @@ describe('AppController (e2e)', () => {
       .get('/missing?token=private')
       .expect(404);
     expect(response.body).toEqual({
-      statusCode: 404,
-      request_id: response.headers['x-request-id'],
+      requestId: response.headers['x-request-id'],
       code: ErrorCode.NOT_FOUND,
       message: expect.any(String),
-      timestamp: expect.any(String),
+      details: [],
     });
-    expect(Number.isNaN(Date.parse(response.body.timestamp))).toBe(false);
   });
 
-  it('preserves validation messages and the HTTP status', async () => {
+  it('moves validation messages to details and preserves the HTTP status', async () => {
     vi.spyOn(app.get(AppService), 'getHello').mockImplementation(() => {
       throw new BadRequestException([
         'email must be valid',
@@ -93,12 +91,40 @@ describe('AppController (e2e)', () => {
       ]);
     });
     const response = await request(app.getHttpServer()).get('/').expect(400);
-    expect(response.body.message).toEqual([
-      'email must be valid',
-      'name is required',
-    ]);
-    expect(response.body.code).toBe(ErrorCode.BAD_REQUEST);
+    expect(response.body).toEqual({
+      code: ErrorCode.BAD_REQUEST,
+      message: 'Bad Request',
+      details: ['email must be valid', 'name is required'],
+      requestId: response.headers['x-request-id'],
+    });
   });
+
+  it.each([
+    {
+      message: 'Invalid input',
+      details: ['Choose an allowed value'],
+      expectedDetails: ['Choose an allowed value'],
+    },
+    {
+      message: 'Invalid input',
+      details: { sql: 'private query' },
+      expectedDetails: [],
+    },
+  ])(
+    'normalizes explicit client error details ($details)',
+    async ({ message, details, expectedDetails }) => {
+      vi.spyOn(app.get(AppService), 'getHello').mockImplementation(() => {
+        throw new BadRequestException({ message, details });
+      });
+      const response = await request(app.getHttpServer()).get('/').expect(400);
+      expect(response.body).toEqual({
+        code: ErrorCode.BAD_REQUEST,
+        message,
+        details: expectedDetails,
+        requestId: response.headers['x-request-id'],
+      });
+    },
+  );
 
   it.each([
     {
@@ -108,7 +134,10 @@ describe('AppController (e2e)', () => {
       message: 'Internal Server Error',
     },
     {
-      error: new ServiceUnavailableException('private upstream URL'),
+      error: new ServiceUnavailableException({
+        message: 'private upstream URL',
+        details: ['private database details'],
+      }),
       status: 503,
       code: ErrorCode.SERVICE_UNAVAILABLE,
       message: 'Service Unavailable',
@@ -132,11 +161,10 @@ describe('AppController (e2e)', () => {
         .get('/')
         .expect(status);
       expect(response.body).toEqual({
-        statusCode: status,
-        request_id: response.headers['x-request-id'],
+        requestId: response.headers['x-request-id'],
         code,
         message,
-        timestamp: expect.any(String),
+        details: [],
       });
       expect(log.mock.calls).toEqual([[{ method: 'GET', status }]]);
     },
@@ -149,9 +177,10 @@ describe('AppController (e2e)', () => {
       .send('{ invalid json')
       .expect(400);
     expect(response.body).toMatchObject({
-      statusCode: 400,
       code: ErrorCode.BAD_REQUEST,
       message: expect.any(String),
+      details: [],
+      requestId: response.headers['x-request-id'],
     });
   });
 
@@ -228,7 +257,7 @@ describe('AppController (e2e)', () => {
       .set('Content-Type', 'application/json')
       .send('{ broken')
       .expect(400);
-    expect(response.body.request_id).toBe('client-request-123');
+    expect(response.body.requestId).toBe('client-request-123');
     expect(response.headers['x-request-id']).toBe('client-request-123');
     await app.get(RequestLogService).flush();
     const [file] = await readdir(logDirectory);

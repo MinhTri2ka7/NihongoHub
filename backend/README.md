@@ -28,10 +28,11 @@
 ## Continuous integration
 
 [Backend CI](../.github/workflows/backend-ci.yml) runs on every push to `main`,
-including commits merged into `main`. It uses Node.js 24 and runs two independent jobs:
+including commits merged into `main`. It uses Node.js 24 and runs three independent jobs:
 
 - **Tests and code style:** `npm ci`, `npm run format:check`, `npm run lint`,
-  `npm run test:cov`, and `npm run test:e2e`.
+  `npm test`, and `npm run test:e2e`.
+- **Code coverage:** `npm ci`, `npm run test:cov`, summary publishing and report upload.
 - **Typecheck and build:** `npm ci`, `npm run typecheck`, and `npm run build`.
 
 Commands run from `backend/`. Format checking reports differences without rewriting
@@ -41,10 +42,13 @@ it does not start or deploy the application. A failing command fails its job.
 
 ### Code coverage
 
-The test job measures unit test coverage with Vitest V8 across `src/**/*.ts`,
+The dedicated coverage job measures test coverage with Vitest V8 across `src/**/*.ts`,
 including source files not reached by tests, excluding test files and type
 declarations. E2E tests run separately and are not included in these percentages.
-Coverage is informational; no minimum percentage is enforced.
+Coverage is informational; no minimum percentage is enforced. The coverage job runs
+the `.spec.ts` suite independently from the test job, so failures in either job do
+not prevent the other job from starting. The suite also includes isolated HTTP
+integration tests for shared error handling; the separate E2E suite is not merged.
 
 - **GitHub Actions:** open a workflow run's Summary to see lines, branches,
   functions and statements, with covered/total counts.
@@ -146,13 +150,18 @@ external service connectivity. `uptime` is the process uptime in seconds.
 ## HTTP exception handling
 
 `src/common/filters/http-exception.filter.ts` is registered globally with
-`APP_FILTER` in `AppModule`. Failed HTTP requests return `statusCode`, `code`, `message`,
-`request_id`, and an ISO `timestamp`. Responses omit the request path. Unmatched
+`APP_FILTER` in `AppModule`. Failed HTTP requests return exactly `code`, `message`,
+`details`, and `requestId`. The status remains in the HTTP response status.
+`requestId` matches the `X-Request-Id` header and the access log's `request_id`.
+Responses omit the request path. Unmatched
 routes use a fixed `Not Found` message without echoing the URL.
 
-HTTP client errors retain their status and string/string-array messages,
-including validation errors. Unexpected errors return 500. All 5xx responses
-use a generic HTTP reason phrase. The filter logs only `method` and `status`;
+HTTP client errors retain their status and string messages. Validation message
+arrays are returned as `details`, with a generic HTTP reason phrase in `message`.
+Explicit client error `details` accept an array of public strings; other shapes
+are discarded. Without details, the response contains `details: []`.
+Unexpected errors return 500. All 5xx responses use a generic HTTP reason phrase
+and empty details. The filter logs only `method` and `status`;
 it does not log paths, request IDs, error codes, stacks, messages, or causes.
 Malformed JSON remains a 400 with a fixed `Bad Request` message.
 

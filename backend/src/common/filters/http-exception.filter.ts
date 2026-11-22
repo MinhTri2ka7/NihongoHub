@@ -49,16 +49,17 @@ export class HttpExceptionFilter extends BaseExceptionFilter<unknown> {
       return;
     }
 
+    const clientError = request.route
+      ? this.getClientError(exception, statusCode)
+      : { message: STATUS_CODES[statusCode] ?? 'Error', details: [] };
+
     httpAdapter.reply(
       response,
       {
-        statusCode,
-        request_id: request.request_id,
         code: this.getErrorCode(exception, statusCode),
-        message: !request.route
-          ? (STATUS_CODES[statusCode] ?? 'Error')
-          : this.getClientMessage(exception, statusCode),
-        timestamp: new Date().toISOString(),
+        message: clientError.message,
+        details: clientError.details,
+        requestId: request.request_id,
       },
       statusCode,
     );
@@ -84,33 +85,44 @@ export class HttpExceptionFilter extends BaseExceptionFilter<unknown> {
     return getErrorCodeForStatus(statusCode);
   }
 
-  private getClientMessage(
+  private getClientError(
     exception: unknown,
     statusCode: number,
-  ): string | string[] {
+  ): { message: string; details: string[] } {
     const fallback = STATUS_CODES[statusCode] ?? 'Error';
+    const defaultError = { message: fallback, details: [] };
     // Internal error details are excluded from both responses and logs.
     if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
-      return fallback;
+      return defaultError;
     }
 
     if (exception instanceof HttpException) {
       const body = exception.getResponse();
       if (typeof body === 'string') {
-        return body;
+        return { message: body, details: [] };
       }
       if (!(body instanceof Error) && 'message' in body) {
         const message: unknown = body.message;
         if (
-          typeof message === 'string' ||
-          (Array.isArray(message) &&
-            message.every((item) => typeof item === 'string'))
+          Array.isArray(message) &&
+          message.every((item) => typeof item === 'string')
         ) {
-          return message;
+          return { message: fallback, details: message };
+        }
+        if (typeof message === 'string') {
+          const details: unknown = 'details' in body ? body.details : [];
+          return {
+            message,
+            details:
+              Array.isArray(details) &&
+              details.every((item) => typeof item === 'string')
+                ? details
+                : [],
+          };
         }
       }
     }
 
-    return fallback;
+    return defaultError;
   }
 }

@@ -38,8 +38,42 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run unit tests
-        run: npm test
+      - name: Run unit tests with coverage
+        id: coverage
+        run: npm run test:cov
+
+      - name: Publish coverage summary
+        if: ${{ !cancelled() && hashFiles('backend/coverage/coverage-summary.json') != '' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const { total } = JSON.parse(readFileSync('coverage/coverage-summary.json', 'utf8'));
+          const rows = ['lines', 'branches', 'functions', 'statements'].map((key) => {
+            const metric = total[key];
+            return `| ${key} | ${metric.pct}% | ${metric.covered} / ${metric.total} |`;
+          });
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Backend unit test coverage',
+            '',
+            '| Metric | Coverage | Covered / Total |',
+            '| --- | ---: | ---: |',
+            ...rows,
+            '',
+            'Includes backend source files not reached by unit tests. E2E coverage is not included.',
+            'Download the backend-coverage artifact and open index.html for per-file details.',
+            'Coverage is informational; no minimum threshold is enforced.',
+            '',
+          ].join('\n'));
+          NODE
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() && hashFiles('backend/coverage/coverage-summary.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Run E2E tests
         run: npm run test:e2e

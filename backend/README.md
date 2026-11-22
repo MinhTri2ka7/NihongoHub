@@ -31,13 +31,31 @@
 including commits merged into `main`. It uses Node.js 24 and runs two independent jobs:
 
 - **Tests and code style:** `npm ci`, `npm run format:check`, `npm run lint`,
-  `npm test`, and `npm run test:e2e`.
+  `npm run test:cov`, and `npm run test:e2e`.
 - **Typecheck and build:** `npm ci`, `npm run typecheck`, and `npm run build`.
 
 Commands run from `backend/`. Format checking reports differences without rewriting
 files; use `npm run format` locally to fix them. Tests use mocks and test settings,
 so CI does not need real database or AWS credentials. The build compiles the backend;
 it does not start or deploy the application. A failing command fails its job.
+
+### Code coverage
+
+The test job measures unit test coverage with Vitest V8 across `src/**/*.ts`,
+including source files not reached by tests, excluding test files and type
+declarations. E2E tests run separately and are not included in these percentages.
+Coverage is informational; no minimum percentage is enforced.
+
+- **GitHub Actions:** open a workflow run's Summary to see lines, branches,
+  functions and statements, with covered/total counts.
+- **Detailed report:** download the `backend-coverage` artifact from that run,
+  extract it and open `index.html`. Reports are retained for 14 days and also
+  contain `lcov.info` and `coverage-summary.json`.
+- **Local:** run `npm run test:cov` in `backend/`, then open
+  `coverage/index.html`. Generated reports are ignored by Git.
+
+Reports are generated even when tests fail where possible; publishing steps run
+when a summary file is available, without overriding the failing test result.
 
 ## Project setup
 

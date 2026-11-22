@@ -8,6 +8,7 @@
 
 # compiled output
 /dist
+/coverage/
 /tmp
 /out-tsc
 /*.tsbuildinfo

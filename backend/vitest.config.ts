@@ -11,5 +11,13 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     root: './',
     include: ['**/*.spec.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['**/*.spec.ts', '**/*.d.ts'],
+      reportsDirectory: './coverage',
+      reporter: ['text', 'html', 'lcovonly', 'json-summary'],
+      reportOnFailure: true,
+    },
   },
 });

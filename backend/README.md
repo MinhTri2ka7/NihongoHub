@@ -91,6 +91,27 @@ These checks verify redaction and failure behavior; they are not a substitute fo
 Trivy scan. False positives require review, and dependency upgrades or ignore rules are
 separate changes; the workflow does not fix or suppress findings automatically.
 
+### Dependency security pins
+
+Vitest and `@vitest/coverage-v8` are pinned together at `4.1.12`. The npm overrides
+keep vulnerable transitive dependencies on reviewed patched versions:
+
+| Dependency | Pinned version | Scope |
+| ---------- | -------------- | ----- |
+| `brace-expansion` | `5.0.12` | Transitive glob handling |
+| `fast-uri` | `3.1.9` | Transitive URI handling |
+| `source-map-js` | `1.2.2` | Build/test source maps |
+| `vite` | `8.2.4` | Vitest/Vite toolchain |
+| `minimatch` | `11.0.1` | Under `@nestjs/cli` only |
+| `undici` | `6.29.1` | Under `@nestjs/mau` only |
+| `tmp` | `0.2.7` | Under `external-editor` only |
+
+These overrides are temporary security constraints, not application dependencies.
+When upgrading parent packages, review whether each override can be removed, then
+rerun Trivy (including development dependencies), `npm audit`, tests, coverage,
+typecheck and build. Changes to CLI/editor dependencies also require checking
+Nest generation in dry-run mode and temporary-file creation/cleanup without deploying.
+
 ## Project setup
 
 Use Node.js 24 or later. Copy `.env.example` to `.env.local` and adjust the

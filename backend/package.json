@@ -78,6 +78,12 @@
     "@nestjs/cli": {
       "minimatch": "11.0.1"
     },
+    "@stryker-mutator/core": {
+      "minimatch": "11.0.1"
+    },
+    "typed-rest-client": {
+      "qs": "6.16.1"
+    },
     "@nestjs/mau": {
       "undici": "6.29.1"
     },

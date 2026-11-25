@@ -44,8 +44,10 @@ it; the caller owns delivery policy and timing. SMTP acceptance is not inbox del
 
 ## Continuous integration
 
-[Backend CI](../.github/workflows/backend-ci.yml) runs on every push to `main`,
-including commits merged into `main`. It uses Node.js 24 and runs five independent jobs:
+[Backend CI](../.github/workflows/backend-ci.yml) runs on every push to `main`
+and on pull requests targeting `main` when opened, updated with commits, reopened
+or marked ready for review. Draft PRs are checked too. A newer run for the same
+PR or branch cancels the older run. It uses Node.js 24 and runs five independent jobs:
 
 - **Tests and code style:** `npm ci`, `npm run format:check`, `npm run lint`,
   and `npm test` for unit and integration tests.
@@ -60,6 +62,50 @@ Commands run from `backend/`. Format checking reports differences without rewrit
 files; use `npm run format` locally to fix them. Tests use mocks and test settings,
 so CI does not need real database or AWS credentials. The build compiles the backend;
 it does not start or deploy the application. A failing command fails its job.
+
+### Pull request merge checks
+
+The approved workflow change adds `Backend CI result`, an always-running final
+job depending on all five jobs above. It reports each result in the workflow
+Summary and emits an error annotation with the failing check names. Failure,
+cancellation, skipped jobs and missing results all make this final check fail.
+Open a failed job in the PR's **Checks** tab to find the exact command and error.
+The workflow uses `pull_request` with read-only repository permissions, without
+posting PR comments or requiring application secrets.
+
+```mermaid
+sequenceDiagram
+    actor U as Người tạo PR
+    participant G as GitHub
+    participant C as Backend CI
+    U->>G: Mở hoặc cập nhật PR vào main
+    G->>C: Chạy test, coverage, security, build và mutation
+    C->>C: Tổng hợp kết quả của tất cả job
+    alt Tất cả job thành công
+        C-->>G: Backend CI result thành công
+        G-->>U: Cho phép merge nếu các điều kiện khác đạt
+    else Có job lỗi, bị hủy hoặc không chạy
+        C-->>G: Check thất bại, kèm Summary và lỗi
+        G-->>U: Chặn merge bằng required check
+    end
+```
+
+Workflow files alone cannot enforce merge restrictions. Branch protection for
+`MinhTri2ka7/NihongoHub:main` was configured and read back on 2026-11-25: it requires
+`Backend CI result` from GitHub Actions (app ID `15368`), an up-to-date PR branch
+and a PR (zero mandatory approvals), and applies to administrators too. Force
+pushes and branch deletion are disabled.
+PR creation remains allowed so CI can report and help fix errors; merging stays
+blocked until the required check passes. This check becomes available when the
+updated workflow is pushed on a PR branch. No coverage or mutation-score threshold
+is added; their existing policy remains unchanged.
+
+Local verification parsed the YAML and exercised the aggregate script in 21
+scenarios: all checks passing, plus failure, cancellation, skipping and missing
+results for each dependency job. All scenarios and the 14 security-report tests
+passed. The new PR workflow has not been executed on GitHub yet; commit and push
+the workflow on a PR branch to produce the required check. Until then, the new
+required check remains pending and prevents merging.
 
 ### Code coverage
 
@@ -121,11 +167,42 @@ keep vulnerable transitive dependencies on reviewed patched versions:
 | `fast-uri` | `3.1.9` | Transitive URI handling |
 | `source-map-js` | `1.2.2` | Build/test source maps |
 | `vite` | `8.2.4` | Vitest/Vite toolchain |
-| `minimatch` | `11.0.1` | Under `@nestjs/cli` only |
+| `minimatch` | `11.0.1` | Under `@nestjs/cli` and `@stryker-mutator/core` |
+| `qs` | `6.16.1` | Under `typed-rest-client` only |
 | `undici` | `6.29.1` | Under `@nestjs/mau` only |
 | `tmp` | `0.2.7` | Under `external-editor` only |
 
 These overrides are temporary security constraints, not application dependencies.
+The approved Stryker security fix replaces `minimatch@10.2.6` and the
+`typed-rest-client` copy of `qs@6.15.1` to address the five reported CVEs.
+Only `package.json`, `package-lock.json` and this README are in scope. Install
+with `npm install --ignore-scripts`, then verify `npm audit`, typecheck, unit and
+integration tests, lint, build and the mutation pilot. The `minimatch` major
+override requires the mutation pilot to confirm compatibility on Node.js 24.
+
+Implemented and verified on Node.js 24: a clean `npm ci --ignore-scripts` and
+`npm audit` report zero vulnerabilities including development dependencies.
+Typecheck, lint, build and all 269 tests pass (`npm run test:cov`). The mutation
+pilot completes successfully with 32 killed and 4 surviving mutants (88.89%).
+On Windows, its child-process cleanup requires permission to terminate its test
+workers; the sandboxed run failed cleanup, while the run outside the sandbox passed.
+Trivy must still be rerun in CI; it is not installed locally.
+
+```mermaid
+sequenceDiagram
+    participant N as npm
+    participant D as Dependency
+    participant T as Kiểm tra
+    N->>D: Cài minimatch 11.0.1 và qs 6.16.1 theo override
+    D-->>N: Cập nhật lockfile
+    N->>T: Chạy audit, test, build và mutation test
+    alt Tất cả kiểm tra đạt
+        T-->>N: Xác nhận bản sửa tương thích
+    else Có lỗi
+        T-->>N: Báo lỗi cần xử lý trước khi hoàn tất
+    end
+```
+
 When upgrading parent packages, review whether each override can be removed, then
 rerun Trivy (including development dependencies), `npm audit`, tests, coverage,
 typecheck and build. Changes to CLI/editor dependencies also require checking
@@ -149,15 +226,15 @@ use the existing mocked configuration/integrations.
   A survivor can preserve observable behavior, so review it before changing tests.
 
 The **Mutation testing pilot** job runs alongside the other jobs in
-[Backend CI](../.github/workflows/backend-ci.yml) on every push to `main`, including
-merged commits. Open the same workflow run to see its status, summary and
+[Backend CI](../.github/workflows/backend-ci.yml) on pull requests targeting `main`
+and every push to `main`, including merged commits. Open the same workflow run to see its status, summary and
 `backend-mutation-report` artifact, retained for 14 days. Its score does not enforce
 a minimum threshold. Failing baseline tests or runner errors still fail the job.
 
 Stryker's sandbox and generated reports are ignored by Git and excluded from Vitest
-discovery. New mutation-tool dependencies must also pass the normal security review;
-the initial installation reports moderate findings in its transitive `minimatch`
-and `qs` dependencies, with no HIGH/CRITICAL in npm audit. These are not ignored by CI.
+discovery. New mutation-tool dependencies must also pass the normal security review.
+The transitive `minimatch` and `qs` findings from the initial installation are
+addressed by the scoped security overrides above, without suppressing CI findings.
 
 ## Project setup
 

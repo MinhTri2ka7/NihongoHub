@@ -3,6 +3,13 @@ name: Backend CI
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -12,6 +19,45 @@ defaults:
     working-directory: backend
 
 jobs:
+  result:
+    name: Backend CI result
+    if: ${{ always() }}
+    needs: [test, coverage, security, build, mutation]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Report required checks and fail on errors
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          const results = JSON.parse(process.env.REQUIRED_RESULTS);
+          const names = {
+            test: 'Tests and code style',
+            coverage: 'Code coverage',
+            security: 'Security - Trivy',
+            build: 'Typecheck and build',
+            mutation: 'Mutation testing pilot',
+          };
+          const failed = Object.keys(names).filter(key => results[key]?.result !== 'success');
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Backend CI result', '',
+            failed.length ? '**FAILED — merge is blocked when this check is required.**' : '**PASSED**', '',
+            '| Check | Result |', '| --- | --- |',
+            ...Object.entries(names).map(([key, name]) => `| ${name} | ${results[key]?.result ?? 'missing'} |`), '',
+            `[Open workflow logs to inspect the failed job and step](${process.env.RUN_URL})`, '',
+          ].join('\n'));
+          if (failed.length) {
+            console.error(`::error title=Backend CI failed::Required checks failed or did not complete: ${failed.map(key => names[key]).join(', ')}. Open the failed job logs for details.`);
+            process.exitCode = 1;
+          }
+          NODE
+
   test:
     name: Tests and code style
     runs-on: ubuntu-latest

@@ -7,11 +7,17 @@ dự án; đọc cùng với các hướng dẫn NestJS và Observe ở cuối f
 
 ### 1. Đọc tài liệu trước khi code
 
+- Trước mỗi lần làm việc với một module backend, đọc lại `README.md` trong thư mục module đó theo [quy tắc chung](../docs/ai-rules/README.md#đọc-readme-của-module-trước-khi-làm-việc); áp dụng cả khi khảo sát, đề xuất hoặc sửa test và khi task ảnh hưởng nhiều module.
 - Trước khi đề xuất triển khai, đọc `AGENTS.md`, tài liệu kiến trúc, cấu hình và
   code liên quan đến task; xác định phiên bản package thực tế trong dự án.
 - Đọc tài liệu chính thức tương ứng với phiên bản đang dùng trước khi sử dụng
   API của framework hoặc thư viện. Ưu tiên package first-party của NestJS.
-- Tài liệu riêng của dự án: **[CHỜ NGƯỜI DÙNG BỔ SUNG LINK]**.
+- Trước mỗi lần viết/sửa code backend, bắt buộc đọc lại
+  [docs/backend/README.md](../docs/backend/README.md), kể cả khi đã đọc ở task trước.
+  Đây là điểm bắt đầu mô tả cấu trúc hiện tại, ranh giới trách nhiệm và kiểm tra bắt buộc.
+- Từ README đó, đọc các tài liệu liên quan trong
+  [docs/backend/structure/](../docs/backend/structure/README.md) trước khi triển khai;
+  phân biệt quy ước mục tiêu với những gì code hiện tại đã hỗ trợ.
 - Không tự suy diễn nội dung của tài liệu chưa được cung cấp. Nếu thiếu tài liệu
   ảnh hưởng đến quyết định triển khai, nêu phần chưa rõ trong đề xuất trước khi code.
 
@@ -162,7 +168,9 @@ npm run lint
 
 - Trước khi viết/sửa code, test, dependency hoặc cấu hình chạy/build, phải lập
   **plan gồm sơ đồ luồng và phần mô tả triển khai**; không chỉ đưa sơ đồ riêng lẻ.
-  Sơ đồ có thể dùng Mermaid hoặc text ngắn gọn.
+  Viết thiết kế vào README của module trước khi triển khai. Sơ đồ dùng Mermaid
+  `sequenceDiagram` theo [quy tắc sơ đồ chung](../docs/ai-rules/README.md#viết-thiết-kế-vào-readme-trước-khi-triển-khai):
+  các bên tham gia, lời gọi, phản hồi và nhánh lỗi theo thứ tự thời gian.
 - Phần mô tả phải nêu mục tiêu, hiện trạng liên quan, cách triển khai, phạm vi và
   file dự kiến thay đổi, kết quả mong đợi, cách kiểm thử và tiêu chí hoàn thành.
 - Sơ đồ phải thể hiện điểm vào, các lớp/module được gọi, dependency/tích hợp bên

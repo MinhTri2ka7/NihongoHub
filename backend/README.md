@@ -1,3 +1,7 @@
+## Tài liệu kỹ thuật dành cho AI và lập trình viên
+
+Trước mỗi lần viết hoặc sửa code backend, đọc [docs/backend/README.md](../docs/backend/README.md) và tuân thủ [AGENTS.md](./AGENTS.md). README kỹ thuật dẫn tới các quy ước trong [structure/](../docs/backend/structure/README.md), mô tả ranh giới giữa các phần và các kiểm tra bắt buộc.
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
@@ -25,10 +29,23 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Email infrastructure
+
+The [email module](src/infrastructure/email/README.md) exports `EmailService` for code,
+email verification code and study reminder messages. It uses Nodemailer SMTP with
+three HBS templates copied into `dist` during build. The `ses/` folder is a placeholder
+only. See [configuration](src/config/README.md) for validated SMTP settings.
+
+Email is disabled by default in `.env.example`. Local configuration supplied by the
+user is stored only in the Git-ignored `.env.local`; no real email is sent at startup
+or in tests. `AUTH_EMAIL_VERIFICATION_KEY` is configured separately from JWT settings
+but is not yet used by an auth implementation. Sending a reminder does not schedule
+it; the caller owns delivery policy and timing. SMTP acceptance is not inbox delivery.
+
 ## Continuous integration
 
 [Backend CI](../.github/workflows/backend-ci.yml) runs on every push to `main`,
-including commits merged into `main`. It uses Node.js 24 and runs four independent jobs:
+including commits merged into `main`. It uses Node.js 24 and runs five independent jobs:
 
 - **Tests and code style:** `npm ci`, `npm run format:check`, `npm run lint`,
   and `npm test` for unit and integration tests.
@@ -36,6 +53,8 @@ including commits merged into `main`. It uses Node.js 24 and runs four independe
 - **Typecheck and build:** `npm ci`, `npm run typecheck`, and `npm run build`.
 - **Security - Trivy:** scans the checked-out repository for dependency vulnerabilities,
   supported configuration issues and exposed secrets; publishes a sanitized summary and artifact.
+- **Mutation testing pilot:** `npm ci`, `npm run test:mutation`, summary publishing
+  and report upload for JWT verification and request logging middleware.
 
 Commands run from `backend/`. Format checking reports differences without rewriting
 files; use `npm run format` locally to fix them. Tests use mocks and test settings,
@@ -129,12 +148,11 @@ use the existing mocked configuration/integrations.
 - The score is `(Killed + Timeout) / (Killed + Timeout + Survived + NoCoverage)`.
   A survivor can preserve observable behavior, so review it before changing tests.
 
-The separate [Backend Mutation Testing workflow](../.github/workflows/backend-mutation.yml)
-runs manually: GitHub Actions → Backend Mutation Testing → Run workflow. The workflow
-must first be present on the default branch. It publishes a summary and a
-`backend-mutation-report` artifact retained for 14 days. This pilot does not run on
-every push, and its score does not enforce a minimum threshold. Failing baseline
-tests or runner errors still fail the job.
+The **Mutation testing pilot** job runs alongside the other jobs in
+[Backend CI](../.github/workflows/backend-ci.yml) on every push to `main`, including
+merged commits. Open the same workflow run to see its status, summary and
+`backend-mutation-report` artifact, retained for 14 days. Its score does not enforce
+a minimum threshold. Failing baseline tests or runner errors still fail the job.
 
 Stryker's sandbox and generated reports are ignored by Git and excluded from Vitest
 discovery. New mutation-tool dependencies must also pass the normal security review;
@@ -227,6 +245,12 @@ port configured in `PORT`). A running backend returns HTTP 200:
 This endpoint checks application liveness only; it does not check database or
 external service connectivity. `uptime` is the process uptime in seconds.
 
+## S3 storage
+
+`src/infrastructure/storage/` configures S3 storage through `envConfig.s3` and is imported
+by `AppModule`. See [S3 configuration](./src/infrastructure/storage/README.md) for credentials,
+bucket settings, startup checks and how feature modules access the client.
+
 ## HTTP exception handling
 
 `src/common/filters/http-exception.filter.ts` is registered globally with
@@ -306,7 +330,9 @@ database/
   database.service.ts      # Startup connectivity check and readiness query
   database.types.ts        # Shared typed Database
   relations.ts             # Relational query definitions
-  schema/index.ts          # Export table schemas here (currently empty)
+  schema/index.ts          # Export table schemas
+  schema/users.schema.ts   # User accounts
+  schema/refresh-tokens.schema.ts # Refresh token sessions
 ```
 
 Set `DATABASE_URL` in `.env.local` to your PostgreSQL connection string, including
@@ -332,8 +358,19 @@ isolated test database when checking actual queries and transactions.
 
 Inject the database into future providers with `@InjectDrizzle()` from
 `@nestjs/drizzle` and the `Database` type from `database.types.ts`. Table
-definitions and relations are intentionally empty until features are added.
-No users module or table has been created.
+definitions include `users` and `refreshTokens`, with a one-to-many relation
+configured through `defineRelations`.
+
+`users` stores UUID identifiers, email, password hash and creation/update times.
+The unique email index ignores letter case. `updatedAt` is refreshed by Drizzle
+updates; direct SQL updates must set it explicitly.
+
+`refresh_tokens` stores a unique token hash, user reference, expiry, optional
+revocation time and creation time. Store a hash of each refresh token rather
+than its raw value. The foreign key cascades token deletion when a user is
+deleted; indexes support user lookup and expired-token cleanup. Expiry must be
+later than creation. Auth queries must still reject expired or revoked tokens.
+This schema does not implement registration, login, rotation or cleanup jobs.
 
 Drizzle Kit uses `drizzle.config.ts` at the repository root. It reads environment
 values through `envConfig.database` from `src/config/env.config.ts`, with the same
@@ -348,8 +385,9 @@ npm run db:studio    # Open database browser
 ```
 
 Commit generated files under `drizzle/`. Migrations run as an explicit command,
-not automatically on backend startup. No migration or table is created until
-you define a schema and generate one. ORM and Kit use matching v1 RC releases
+not automatically on backend startup. The initial `auth_users_refresh_tokens`
+migration creates both auth tables; run `npm run db:migrate` to apply it.
+ORM and Kit use matching v1 RC releases
 as documented by the Nest integration; the lockfile records their exact versions.
 
 ## Direct CloudWatch logging

@@ -1,0 +1,1 @@
+export default function Loading() { return <main id="main-content" className="status-page" aria-busy="true"><span className="spinner" /><h1>Đang tải…</h1><p>Một chút thôi, hành trình của bạn sắp tiếp tục.</p></main>; }

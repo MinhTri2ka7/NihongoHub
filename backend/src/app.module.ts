@@ -10,6 +10,9 @@ import { RequestLogService } from './common/logging/request-log.service.js';
 import { RequestLoggingMiddleware } from './common/middleware/request-logging.middleware.js';
 import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { CloudwatchModule } from './infrastructure/cloudwatch/cloudwatch.module.js';
+import { S3Module } from './infrastructure/storage/s3.module.js';
+import { SqsModule } from './infrastructure/queue/sqs.module.js';
+import { EmailModule } from './infrastructure/email/email.module.js';
 import { VerificationsModule } from './common/verifications/verifications.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -19,6 +22,9 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     VerificationsModule,
     DatabaseModule,
     CloudwatchModule,
+    S3Module,
+    SqsModule,
+    EmailModule,
     HealthModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
